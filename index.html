@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Language Recognition App</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the video and canvas overlay */
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #e0f2fe; /* Light blue background */
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+        }
+        .video-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            max-width: 900px; /* Max width for the container */
+            border-radius: 1.5rem; /* Large rounded corners */
+            overflow: hidden; /* Ensure content respects border-radius */
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* Stronger shadow */
+            background-color: #ffffff;
+            padding: 0.5rem;
+        }
+        video {
+            width: 100%;
+            height: auto;
+            border-radius: 1.25rem; /* Match container rounded corners slightly smaller */
+            transform: scaleX(-1); /* Mirror the video horizontally for a selfie-like view */
+            object-fit: cover; /* Ensure video covers the area */
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); /* Mirror the canvas drawing to match the video */
+        }
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 1.5rem 2.5rem;
+            border-radius: 0.75rem;
+            z-index: 1000;
+            text-align: center;
+            font-size: 1.25rem;
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.3);
+            display: none; /* Hidden by default */
+            animation: fadeIn 0.5s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-blue-100 flex flex-col items-center justify-center min-h-screen p-6">
+
+    <h1 class="text-5xl font-extrabold text-blue-800 mb-10 tracking-tight text-center">
+        Sign Language Recognizer
+    </h1>
+
+    <div class="video-container">
+        <video id="video" autoplay muted playsinline class="rounded-2xl"></video>
+        <canvas id="canvas" class="rounded-2xl"></canvas>
+        <div id="loadingMessage" class="absolute inset-0 flex items-center justify-center bg-blue-900 bg-opacity-80 text-white text-2xl font-semibold rounded-2xl z-10">
+            Initializing...
+        </div>
+    </div>
+
+    <div id="recognitionResult" class="mt-8 p-6 bg-blue-600 text-white text-4xl font-bold rounded-xl shadow-lg min-w-[300px] text-center transition-all duration-300 ease-in-out transform hover:scale-105">
+        No Sign Detected
+    </div>
+
+    <div id="messageBox" class="message-box"></div>
+
+    <!-- MediaPipe Hands CDN scripts -->
+    <script src="https://unpkg.com/@mediapipe/hands@0.4.1675469240/hands.min.js"></script>
+    <script src="https://unpkg.com/@mediapipe/camera_utils@0.3/camera_utils.js"></script>
+    <script src="https://unpkg.com/@mediapipe/drawing_utils@0.3/drawing_utils.js"></script>
+
+    <script>
+        // Get references to the video, canvas, and message elements
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const recognitionResult = document.getElementById('recognitionResult');
+        const messageBox = document.getElementById('messageBox');
+        const ctx = canvas.getContext('2d');
+        let stream = null; // To hold the media stream
+
+        // Function to show a custom message box
+        function showMessageBox(message, duration = 3000) {
+            messageBox.textContent = message;
+            messageBox.style.display = 'block';
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, duration);
+        }
+
+        // Initialize MediaPipe Hands
+        // This must be called AFTER the mediapipe scripts are loaded.
+        const hands = new Hands({
+            locateFile: (file) => {
+                // Point to the correct path for MediaPipe model assets
+                return `https://unpkg.com/@mediapipe/hands@0.4.1675469240/${file}`;
+            }
+        });
+
+        // Configure MediaPipe Hands
+        hands.setOptions({
+            maxNumHands: 2, // Detect up to two hands
+            minDetectionConfidence: 0.7, // Minimum confidence for hand detection
+            minTrackingConfidence: 0.7 // Minimum confidence for hand tracking
+        });
+
+        // Callback function when hands detection results are available
+        hands.onResults(onResults);
+
+        // Function to handle the detection results
+        function onResults(results) {
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+            // If hands are detected, draw landmarks and perform gesture recognition
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    // Draw the hand landmarks
+                    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+                    drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 2 });
+
+                    // Perform simple gesture recognition
+                    const recognizedSign = recognizeSimpleGesture(landmarks);
+                    recognitionResult.textContent = recognizedSign;
+                }
+            } else {
+                recognitionResult.textContent = 'No Sign Detected';
+            }
+        }
+
+        // Simple gesture recognition logic
+        // This is a basic example and would need extensive training data for real sign language.
+        // For demonstration, we'll try to recognize a few distinct finger positions.
+        function recognizeSimpleGesture(landmarks) {
+            // Landmarks for fingers:
+            // Thumb: 1, 2, 3, 4
+            // Index: 5, 6, 7, 8
+            // Middle: 9, 10, 11, 12
+            // Ring: 13, 14, 15, 16
+            // Pinky: 17, 18, 19, 20
+
+            // Helper function to check if a finger is extended (tip is higher than the knuckle)
+            const isFingerExtended = (fingerTip, fingerKnuckle) => {
+                // Using Y-coordinate for vertical extension (assuming camera is somewhat frontal)
+                // Lower Y value means higher on the screen
+                return landmarks[fingerTip].y < landmarks[fingerKnuckle].y;
+            };
+
+            const thumbExtended = isFingerExtended(4, 3); // Tip of thumb vs. base of thumb
+            const indexExtended = isFingerExtended(8, 6); // Tip of index vs. middle joint
+            const middleExtended = isFingerExtended(12, 10);
+            const ringExtended = isFingerExtended(16, 14);
+            const pinkyExtended = isFingerExtended(20, 18);
+
+            // Get wrist landmark (0) for relative positioning
+            const wrist = landmarks[0];
+
+            // Example gestures (very simplified):
+            // 1. "Hello" (similar to a wave, or open hand)
+            if (thumbExtended && indexExtended && middleExtended && ringExtended && pinkyExtended) {
+                return "Hello (Open Hand)";
+            }
+            // 2. "Fist" (all fingers curled)
+            if (!thumbExtended && !indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
+                return "Fist";
+            }
+            // 3. "Point" (index finger extended)
+            if (indexExtended && !middleExtended && !ringExtended && !pinkyExtended && !thumbExtended) {
+                return "Point";
+            }
+            // 4. "Peace/Two" (index and middle fingers extended)
+            if (indexExtended && middleExtended && !ringExtended && !pinkyExtended && !thumbExtended) {
+                return "Peace / Two";
+            }
+            // 5. "Thumbs Up" (thumb extended, other fingers curled)
+            if (thumbExtended && !indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
+                // For thumbs up, also check if thumb is relatively "up" compared to wrist
+                if (landmarks[4].y < wrist.y) { // Thumb tip is above wrist
+                    return "Thumbs Up!";
+                }
+            }
+
+            return "Unknown Sign";
+        }
+
+
+        // Function to start the video stream from the webcam
+        async function startVideo() {
+            try {
+                // Request access to the user's webcam
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+
+                // Set up the Camera helper to send video frames to MediaPipe Hands
+                const camera = new Camera(video, {
+                    onFrame: async () => {
+                        await hands.send({ image: video });
+                    },
+                    width: 1280, // Set desired video resolution
+                    height: 720
+                });
+                await camera.start(); // Start the camera stream
+
+                loadingMessage.style.display = 'none'; // Hide loading message once video starts
+                showMessageBox('Camera access granted. Start making signs!');
+
+                // Set canvas dimensions to match video dimensions after camera starts
+                video.addEventListener('loadeddata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    // Ensure canvas is resized on window resize as well
+                    window.addEventListener('resize', () => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                    });
+                });
+
+            } catch (err) {
+                console.error('Error accessing webcam:', err);
+                loadingMessage.textContent = 'Error accessing webcam. Please allow camera permissions.';
+                if (err.name === 'NotAllowedError') {
+                    showMessageBox('Camera access denied. Please allow camera permissions to use this app.');
+                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                    showMessageBox('No camera found. Please ensure a webcam is connected.');
+                } else {
+                    showMessageBox('An error occurred while accessing the webcam: ' + err.message);
+                }
+            }
+        }
+
+        // Start the application when the window loads
+        window.onload = startVideo;
+
+        // Cleanup function when the page is unloaded
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop()); // Stop all tracks to turn off camera
+            }
+        });
+    </script>
+</body>
+</html>
