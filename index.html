@@ -3,266 +3,190 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign Language Recognition App</title>
-    <!-- Tailwind CSS CDN -->
+    <title>Sign Language Recognition</title>
+    <!-- Tailwind CSS CDN for easy styling and responsiveness -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Custom styles for the video and canvas overlay */
         body {
             font-family: 'Inter', sans-serif;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #e0f2fe; /* Light blue background */
-            margin: 0;
-            overflow: hidden; /* Prevent scrollbars */
+            background-color: #f0f4f8; /* Light blue-gray background */
         }
-        .video-container {
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        /* Custom styles for the video and canvas to ensure proper display */
+        #videoFeed, #canvasOutput {
             width: 100%;
-            max-width: 900px; /* Max width for the container */
-            border-radius: 1.5rem; /* Large rounded corners */
-            overflow: hidden; /* Ensure content respects border-radius */
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* Stronger shadow */
-            background-color: #ffffff;
-            padding: 0.5rem;
-        }
-        video {
-            width: 100%;
+            max-width: 640px; /* Max width for video/canvas */
             height: auto;
-            border-radius: 1.25rem; /* Match container rounded corners slightly smaller */
-            transform: scaleX(-1); /* Mirror the video horizontally for a selfie-like view */
-            object-fit: cover; /* Ensure video covers the area */
+            border-radius: 1rem; /* Rounded corners */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Subtle shadow */
+            background-color: #000; /* Black background for video area */
         }
-        canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            transform: scaleX(-1); /* Mirror the canvas drawing to match the video */
-        }
-        .message-box {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.85);
-            color: white;
-            padding: 1.5rem 2.5rem;
-            border-radius: 0.75rem;
-            z-index: 1000;
-            text-align: center;
-            font-size: 1.25rem;
-            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.3);
-            display: none; /* Hidden by default */
-            animation: fadeIn 0.5s ease-out;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+        /* Hide canvas by default, only show if needed for drawing */
+        #canvasOutput {
+            display: none;
+            border: 2px solid #3b82f6; /* Blue border for canvas */
         }
     </style>
 </head>
-<body class="bg-blue-100 flex flex-col items-center justify-center min-h-screen p-6">
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
 
-    <h1 class="text-5xl font-extrabold text-blue-800 mb-10 tracking-tight text-center">
-        Sign Language Recognizer
-    </h1>
+    <div class="bg-white p-8 rounded-2xl shadow-xl max-w-2xl w-full text-center">
+        <h1 class="text-4xl font-bold text-gray-800 mb-6">Sign Language Recognition</h1>
 
-    <div class="video-container">
-        <video id="video" autoplay muted playsinline class="rounded-2xl"></video>
-        <canvas id="canvas" class="rounded-2xl"></canvas>
-        <div id="loadingMessage" class="absolute inset-0 flex items-center justify-center bg-blue-900 bg-opacity-80 text-white text-2xl font-semibold rounded-2xl z-10">
-            Initializing...
+        <!-- Video feed from webcam -->
+        <div class="mb-6 flex justify-center">
+            <video id="videoFeed" autoplay playsinline class="rounded-xl"></video>
+            <!-- Canvas to potentially draw processed frames or hand landmarks (initially hidden) -->
+            <canvas id="canvasOutput" class="rounded-xl"></canvas>
+        </div>
+
+        <!-- Control buttons -->
+        <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
+            <button id="startButton"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg
+                           shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                Start Recognition
+            </button>
+            <button id="stopButton"
+                    class="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-lg
+                           shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+                    disabled>
+                Stop Recognition
+            </button>
+        </div>
+
+        <!-- Display area for recognized signs -->
+        <div class="bg-gray-100 p-6 rounded-xl border border-gray-200">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-3">Recognized Sign:</h2>
+            <p id="recognizedSign" class="text-3xl font-bold text-green-700">
+                Waiting for input...
+            </p>
+            <p id="statusMessage" class="text-sm text-gray-500 mt-2">
+                Click 'Start Recognition' to begin.
+            </p>
+        </div>
+
+        <!-- Message box for alerts (instead of alert()) -->
+        <div id="messageBox" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white p-6 rounded-lg shadow-xl text-center max-w-sm w-full">
+                <p id="messageBoxText" class="text-lg font-medium text-gray-800 mb-4"></p>
+                <button id="messageBoxClose" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md">
+                    OK
+                </button>
+            </div>
         </div>
     </div>
 
-    <div id="recognitionResult" class="mt-8 p-6 bg-blue-600 text-white text-4xl font-bold rounded-xl shadow-lg min-w-[300px] text-center transition-all duration-300 ease-in-out transform hover:scale-105">
-        No Sign Detected
-    </div>
-
-    <div id="messageBox" class="message-box"></div>
-
-    <!-- MediaPipe Hands CDN scripts -->
-    <script src="https://unpkg.com/@mediapipe/hands@0.4.1675469240/hands.min.js"></script>
-    <script src="https://unpkg.com/@mediapipe/camera_utils@0.3/camera_utils.js"></script>
-    <script src="https://unpkg.com/@mediapipe/drawing_utils@0.3/drawing_utils.js"></script>
-
     <script>
-        // Get references to the video, canvas, and message elements
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const loadingMessage = document.getElementById('loadingMessage');
-        const recognitionResult = document.getElementById('recognitionResult');
+        // Get references to HTML elements
+        const videoFeed = document.getElementById('videoFeed');
+        const canvasOutput = document.getElementById('canvasOutput');
+        const recognizedSign = document.getElementById('recognizedSign');
+        const statusMessage = document.getElementById('statusMessage');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
         const messageBox = document.getElementById('messageBox');
-        const ctx = canvas.getContext('2d');
-        let stream = null; // To hold the media stream
+        const messageBoxText = document.getElementById('messageBoxText');
+        const messageBoxClose = document.getElementById('messageBoxClose');
+
+        let stream = null; // To hold the webcam stream
+        let recognitionInterval = null; // To hold the interval for recognition loop
 
         // Function to show a custom message box
-        function showMessageBox(message, duration = 3000) {
-            messageBox.textContent = message;
-            messageBox.style.display = 'block';
-            setTimeout(() => {
-                messageBox.style.display = 'none';
-            }, duration);
+        function showMessageBox(message) {
+            messageBoxText.textContent = message;
+            messageBox.classList.remove('hidden');
         }
 
-        // Initialize MediaPipe Hands
-        // This must be called AFTER the mediapipe scripts are loaded.
-        const hands = new Hands({
-            locateFile: (file) => {
-                // Point to the correct path for MediaPipe model assets
-                return `https://unpkg.com/@mediapipe/hands@0.4.1675469240/${file}`;
-            }
+        // Event listener for message box close button
+        messageBoxClose.addEventListener('click', () => {
+            messageBox.classList.add('hidden');
         });
 
-        // Configure MediaPipe Hands
-        hands.setOptions({
-            maxNumHands: 2, // Detect up to two hands
-            minDetectionConfidence: 0.7, // Minimum confidence for hand detection
-            minTrackingConfidence: 0.7 // Minimum confidence for hand tracking
-        });
-
-        // Callback function when hands detection results are available
-        hands.onResults(onResults);
-
-        // Function to handle the detection results
-        function onResults(results) {
-            // Clear the canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-
-            // If hands are detected, draw landmarks and perform gesture recognition
-            if (results.multiHandLandmarks) {
-                for (const landmarks of results.multiHandLandmarks) {
-                    // Draw the hand landmarks
-                    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
-                    drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 2 });
-
-                    // Perform simple gesture recognition
-                    const recognizedSign = recognizeSimpleGesture(landmarks);
-                    recognitionResult.textContent = recognizedSign;
-                }
-            } else {
-                recognitionResult.textContent = 'No Sign Detected';
-            }
-        }
-
-        // Simple gesture recognition logic
-        // This is a basic example and would need extensive training data for real sign language.
-        // For demonstration, we'll try to recognize a few distinct finger positions.
-        function recognizeSimpleGesture(landmarks) {
-            // Landmarks for fingers:
-            // Thumb: 1, 2, 3, 4
-            // Index: 5, 6, 7, 8
-            // Middle: 9, 10, 11, 12
-            // Ring: 13, 14, 15, 16
-            // Pinky: 17, 18, 19, 20
-
-            // Helper function to check if a finger is extended (tip is higher than the knuckle)
-            const isFingerExtended = (fingerTip, fingerKnuckle) => {
-                // Using Y-coordinate for vertical extension (assuming camera is somewhat frontal)
-                // Lower Y value means higher on the screen
-                return landmarks[fingerTip].y < landmarks[fingerKnuckle].y;
-            };
-
-            const thumbExtended = isFingerExtended(4, 3); // Tip of thumb vs. base of thumb
-            const indexExtended = isFingerExtended(8, 6); // Tip of index vs. middle joint
-            const middleExtended = isFingerExtended(12, 10);
-            const ringExtended = isFingerExtended(16, 14);
-            const pinkyExtended = isFingerExtended(20, 18);
-
-            // Get wrist landmark (0) for relative positioning
-            const wrist = landmarks[0];
-
-            // Example gestures (very simplified):
-            // 1. "Hello" (similar to a wave, or open hand)
-            if (thumbExtended && indexExtended && middleExtended && ringExtended && pinkyExtended) {
-                return "Hello (Open Hand)";
-            }
-            // 2. "Fist" (all fingers curled)
-            if (!thumbExtended && !indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
-                return "Fist";
-            }
-            // 3. "Point" (index finger extended)
-            if (indexExtended && !middleExtended && !ringExtended && !pinkyExtended && !thumbExtended) {
-                return "Point";
-            }
-            // 4. "Peace/Two" (index and middle fingers extended)
-            if (indexExtended && middleExtended && !ringExtended && !pinkyExtended && !thumbExtended) {
-                return "Peace / Two";
-            }
-            // 5. "Thumbs Up" (thumb extended, other fingers curled)
-            if (thumbExtended && !indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
-                // For thumbs up, also check if thumb is relatively "up" compared to wrist
-                if (landmarks[4].y < wrist.y) { // Thumb tip is above wrist
-                    return "Thumbs Up!";
-                }
-            }
-
-            return "Unknown Sign";
-        }
-
-
-        // Function to start the video stream from the webcam
-        async function startVideo() {
+        // Function to start webcam and recognition
+        async function startRecognition() {
             try {
                 // Request access to the user's webcam
                 stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                video.srcObject = stream;
+                videoFeed.srcObject = stream;
+                statusMessage.textContent = 'Webcam active. Analyzing hand gestures...';
+                recognizedSign.textContent = 'Detecting...';
 
-                // Set up the Camera helper to send video frames to MediaPipe Hands
-                const camera = new Camera(video, {
-                    onFrame: async () => {
-                        await hands.send({ image: video });
-                    },
-                    width: 1280, // Set desired video resolution
-                    height: 720
-                });
-                await camera.start(); // Start the camera stream
+                // Enable/disable buttons
+                startButton.disabled = true;
+                stopButton.disabled = false;
 
-                loadingMessage.style.display = 'none'; // Hide loading message once video starts
-                showMessageBox('Camera access granted. Start making signs!');
-
-                // Set canvas dimensions to match video dimensions after camera starts
-                video.addEventListener('loadeddata', () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    // Ensure canvas is resized on window resize as well
-                    window.addEventListener('resize', () => {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                    });
-                });
+                // Start the recognition loop after the video metadata is loaded
+                videoFeed.onloadedmetadata = () => {
+                    videoFeed.play();
+                    // Set canvas dimensions to match video
+                    canvasOutput.width = videoFeed.videoWidth;
+                    canvasOutput.height = videoFeed.videoHeight;
+                    // Start the recognition process
+                    recognitionInterval = setInterval(performRecognition, 100); // Run every 100ms
+                };
 
             } catch (err) {
                 console.error('Error accessing webcam:', err);
-                loadingMessage.textContent = 'Error accessing webcam. Please allow camera permissions.';
-                if (err.name === 'NotAllowedError') {
-                    showMessageBox('Camera access denied. Please allow camera permissions to use this app.');
-                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                    showMessageBox('No camera found. Please ensure a webcam is connected.');
-                } else {
-                    showMessageBox('An error occurred while accessing the webcam: ' + err.message);
-                }
+                statusMessage.textContent = 'Error: Could not access webcam. Please ensure camera permissions are granted.';
+                recognizedSign.textContent = 'Error!';
+                showMessageBox('Could not access your webcam. Please check camera permissions and try again.');
+                // Ensure buttons are in correct state on error
+                startButton.disabled = false;
+                stopButton.disabled = true;
             }
         }
 
-        // Start the application when the window loads
-        window.onload = startVideo;
-
-        // Cleanup function when the page is unloaded
-        window.addEventListener('beforeunload', () => {
+        // Function to stop webcam and recognition
+        function stopRecognition() {
             if (stream) {
-                stream.getTracks().forEach(track => track.stop()); // Stop all tracks to turn off camera
+                stream.getTracks().forEach(track => track.stop()); // Stop all tracks (video, audio)
+                videoFeed.srcObject = null;
+                stream = null;
             }
-        });
+            if (recognitionInterval) {
+                clearInterval(recognitionInterval); // Stop the recognition loop
+                recognitionInterval = null;
+            }
+            statusMessage.textContent = 'Recognition stopped. Click "Start Recognition" to resume.';
+            recognizedSign.textContent = 'Waiting for input...';
+
+            // Enable/disable buttons
+            startButton.disabled = false;
+            stopButton.disabled = true;
+        }
+
+        // Placeholder function for actual sign language recognition
+        // In a real application, you would integrate a machine learning model here (e.g., TensorFlow.js)
+        function performRecognition() {
+            // This is where you would typically:
+            // 1. Get the current frame from the videoFeed.
+            //    const context = canvasOutput.getContext('2d');
+            //    context.drawImage(videoFeed, 0, 0, canvasOutput.width, canvasOutput.height);
+            //    const imageData = context.getImageData(0, 0, canvasOutput.width, canvasOutput.height);
+
+            // 2. Pass the image data to a pre-trained machine learning model.
+            //    Example (conceptual, requires TensorFlow.js or similar setup):
+            //    const predictions = await model.predict(imageData);
+            //    const recognizedGesture = processPredictions(predictions);
+
+            // For this example, we'll just simulate recognition based on whether the video is playing.
+            if (videoFeed.readyState === videoFeed.HAVE_ENOUGH_DATA) {
+                // Simulate a recognized sign
+                const signs = ["Hello", "Thank You", "Yes", "No", "Love", "Please"];
+                const randomSign = signs[Math.floor(Math.random() * signs.length)];
+                recognizedSign.textContent = randomSign;
+            } else {
+                recognizedSign.textContent = 'Processing...';
+            }
+        }
+
+        // Event listeners for buttons
+        startButton.addEventListener('click', startRecognition);
+        stopButton.addEventListener('click', stopRecognition);
+
+        // Initial state: ensure stop button is disabled
+        stopButton.disabled = true;
     </script>
 </body>
 </html>
